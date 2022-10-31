@@ -14,12 +14,11 @@ import static com.example.idempotency.service.dto.Model.convertToModel;
 @Service
 @AllArgsConstructor
 public class IdempotenceService {
-    Repository repository;
-    ExternalService externalService;
-    FingerprintService fingerprintService;
+    private Repository repository;
+    private ExternalService externalService;
+    private FingerprintService fingerprintService;
 
     public Model getModel(String key, String id, String payload) {
-
         Optional<ModelEntity> modelFromCache = repository.getModel(key);
         String fingerprint = fingerprintService.getFingerprint(payload);
 

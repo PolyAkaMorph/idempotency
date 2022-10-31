@@ -18,7 +18,7 @@ public class IdempotencyController {
     IdempotenceService idempotenceService;
 
     @GetMapping(value = "/get/{id}")
-    public @ResponseBody Model getTestData(@PathVariable String id, @RequestParam("key") String key, @RequestParam("pl") String payload) throws Exception {
+    public @ResponseBody Model getTestData(@PathVariable("id") String id, @RequestParam("key") String key, @RequestParam("pl") String payload) throws Exception {
         //@RequestHeader("Idempotency-Key") String key, @RequestBody String payload
         //todo switch key to header, payload to body
 
