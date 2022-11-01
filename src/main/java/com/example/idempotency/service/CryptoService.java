@@ -1,5 +1,6 @@
 package com.example.idempotency.service;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -40,6 +41,9 @@ public class CryptoService {
     }
 
     public String encrypt(String text) throws GeneralSecurityException {
+        if (StringUtils.isBlank(text)) {
+            return text;
+        }
         byte[] bytes = text.getBytes(); // StandardCharsets.UTF_8 ?
         byte[] encrypted;
         try {
@@ -52,6 +56,9 @@ public class CryptoService {
     }
 
     public String decrypt(String text) throws GeneralSecurityException {
+        if (StringUtils.isBlank(text)) {
+            return text;
+        }
         byte[] bytes = Base64.getDecoder().decode(text.getBytes()); // StandardCharsets.UTF_8 ?
         byte[] decrypted;
         try {

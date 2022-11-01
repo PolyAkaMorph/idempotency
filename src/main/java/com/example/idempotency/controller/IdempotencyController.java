@@ -1,33 +1,49 @@
 package com.example.idempotency.controller;
 
-import com.example.idempotency.service.dto.Model;
+import com.example.idempotency.exception.RequestRunningException;
+import com.example.idempotency.exception.ValidationException;
 import com.example.idempotency.service.IdempotenceService;
+import com.example.idempotency.service.dto.Model;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.security.GeneralSecurityException;
 import java.util.Objects;
 
 @Controller
 @AllArgsConstructor
+@Slf4j
 public class IdempotencyController {
-    private static final String IDEMPOTENCY_KEY = "Idempotency-Key";
-    IdempotenceService idempotenceService;
+    private IdempotenceService idempotenceService;
 
-    @GetMapping(value = "/get/{id}")
-    public @ResponseBody Model getTestData(@PathVariable("id") String id, @RequestParam("key") String key, @RequestParam("pl") String payload) throws Exception {
-        //@RequestHeader("Idempotency-Key") String key, @RequestBody String payload
-        //todo switch key to header, payload to body
-
+    @PostMapping(value = "/get/{id}")
+    @ResponseBody
+    public Model getTestData(@PathVariable("id") String id, @RequestHeader("Idempotency-Key") String key, @RequestBody String payload) {
+        final String path = String.format("\\/get\\/%s", id);
+        final String method = "POST";
         if (Objects.isNull(key)) {
-            throw new Exception("Null key"); //todo 400 Bad Request https://datatracker.ietf.org/doc/html/draft-idempotency-header-00#section-2.7
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty key");
         }
-
-        Model model = idempotenceService.getModel(key, id, payload);
-        //todo add transformer - exception to http code
+        Model model;
+        try {
+            model = idempotenceService.getModel(key, id, payload, path, method);
+            //model = idempotenceService.getModelFromMemCache(key, id, payload, path, method);
+        } catch (ValidationException e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+        } catch (RequestRunningException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        } catch (GeneralSecurityException e) {
+            log.error(e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
 
         return model;
     }
