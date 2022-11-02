@@ -1,9 +1,10 @@
 package com.example.idempotency.controller;
 
+import com.example.idempotency.aop.IdempotentRequest;
 import com.example.idempotency.exception.RequestRunningException;
 import com.example.idempotency.exception.ValidationException;
 import com.example.idempotency.service.IdempotenceService;
-import com.example.idempotency.service.dto.Model;
+import com.example.idempotency.controller.model.Model;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,7 @@ public class IdempotencyController {
 
     @PostMapping(value = "/get/{id}")
     @ResponseBody
+    @IdempotentRequest
     public Model getTestData(@PathVariable("id") String id, @RequestHeader("Idempotency-Key") String key, @RequestBody String payload) {
         final String path = String.format("\\/get\\/%s", id);
         final String method = "POST";
@@ -43,8 +45,7 @@ public class IdempotencyController {
         } catch (GeneralSecurityException e) {
             log.error(e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-
+        } //todo move to the filter
         return model;
     }
 }

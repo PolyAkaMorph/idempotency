@@ -16,13 +16,14 @@ import java.util.UUID;
 @Entity(name = "modelEntity")
 @Table(name = "cache")
 @Builder
-public class ModelEntity {
+public class RequestEntity {
     @Id @Builder.Default private String id = UUID.randomUUID().toString();
     private String idempotencyKey;
-    private String externalId;
-    private String data;
-    private String fingerprint;
-    private String path;
-    private String method;
+    private String requestPath;
+    private String requestMethod;
+    private String requestFingerprint;
+    private String responseCode;
+    private String responseData;
     private boolean isProcessing;
+    @Builder.Default private Long created = System.currentTimeMillis();
 }

@@ -4,8 +4,8 @@ import com.example.idempotency.exception.RequestRunningException;
 import com.example.idempotency.exception.ValidationException;
 import com.example.idempotency.repo.DBCache;
 import com.example.idempotency.repo.MemCache;
-import com.example.idempotency.repo.entity.ModelEntity;
-import com.example.idempotency.service.dto.Model;
+import com.example.idempotency.repo.entity.RequestEntity;
+import com.example.idempotency.controller.model.Model;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -15,7 +15,7 @@ import java.security.GeneralSecurityException;
 import java.util.Objects;
 import java.util.Optional;
 
-import static com.example.idempotency.service.dto.Model.convertToModel;
+import static com.example.idempotency.controller.model.Model.convertToModel;
 
 @Service
 @AllArgsConstructor
@@ -27,30 +27,32 @@ public class IdempotenceService {
     private FingerprintService fingerprintService;
     private CryptoService cryptoService;
 
-    public Model getModel(String key, String id, String payload, String path, String method) throws RequestRunningException, ValidationException,
-            GeneralSecurityException {
-        Optional<ModelEntity> modelFromCache = cache.findAllByIdempotencyKey(key);
+    public Model getModel(String key, String id, String payload, String path, String method) throws RequestRunningException, ValidationException, GeneralSecurityException {
+        Optional<RequestEntity> modelFromCache = cache.findAllByIdempotencyKey(key);
         String requestFingerprint = fingerprintService.getFingerprint(payload);
 
         if (modelFromCache.isEmpty()) {                 // cache miss
-            ModelEntity modelEntity = ModelEntity.builder()
+            log.info("cache miss");
+            RequestEntity requestEntity = RequestEntity.builder()
                                         .idempotencyKey(key)
-                                        .externalId(id)
-                                        .fingerprint(requestFingerprint)
-                                        .method(method)
-                                        .path(path).build();
+                                        //.externalId(id)
+                                        .requestFingerprint(requestFingerprint)
+                                        .requestMethod(method)
+                                        .requestPath(path)
+                    .build();
 
-            cache.save(modelEntity);
+            cache.save(requestEntity);
 
             String data = externalService.process(id, payload);
-            modelEntity.setData(data);
-            modelEntity.setProcessing(false);
+            //requestEntity.setData(data);
+            requestEntity.setProcessing(false);
 
-            cache.save(getEncryptedCopy(modelEntity));
+            cache.save(getEncryptedCopy(requestEntity));
 
-            return convertToModel(modelEntity);
+            return convertToModel(requestEntity);
         } else {                                        // cache hit
-            ModelEntity decryptedCopy = getDecryptedCopy(modelFromCache.get());
+            log.info("cache hit");
+            RequestEntity decryptedCopy = getDecryptedCopy(modelFromCache.get());
             if (decryptedCopy.isProcessing()) {
                 throw new RequestRunningException();
             }
@@ -61,21 +63,21 @@ public class IdempotenceService {
     }
 
     public Model getModelFromMemCache(String key, String id, String payload, String path, String method) throws RequestRunningException, ValidationException {
-        Optional<ModelEntity> modelFromCache = memCache.getModel(key);
+        Optional<RequestEntity> modelFromCache = memCache.getModel(key);
         String requestFingerprint = fingerprintService.getFingerprint(payload);
 
         if (modelFromCache.isEmpty()) {                 // cache miss
-            ModelEntity modelEntity = ModelEntity.builder()
+            RequestEntity requestEntity = RequestEntity.builder()
                     .idempotencyKey(key)
-                    .externalId(id)
-                    .fingerprint(requestFingerprint)
-                    .method(method)
-                    .path(path).build();
+                    //.externalId(id)
+                    .requestFingerprint(requestFingerprint)
+                    .requestMethod(method)
+                    .requestPath(path).build();
 
 
 
-            if (!memCache.addModel(modelEntity)) { //todo discuss saving failure because of concurrency
-                ModelEntity newModel = memCache.getModel(key)
+            if (!memCache.addModel(requestEntity)) { //todo discuss saving failure because of concurrency
+                RequestEntity newModel = memCache.getModel(key)
                         .orElseThrow(IllegalStateException::new); // can't write, can't read
                 if (newModel.isProcessing()) {
                     throw new RequestRunningException();
@@ -86,12 +88,12 @@ public class IdempotenceService {
             }
 
             String data = externalService.process(id, payload);
-            modelEntity.setData(data);
-            modelEntity.setProcessing(false);
-            if (!memCache.addModel(modelEntity)) {
+            //requestEntity.setData(data);
+            requestEntity.setProcessing(false);
+            if (!memCache.addModel(requestEntity)) {
                 //todo discuss - ignore saving? in this case current request will be in processing forever
             }
-            return convertToModel(modelEntity);
+            return convertToModel(requestEntity);
         } else {                                        // cache hit
             if (modelFromCache.get().isProcessing()) {
                 throw new RequestRunningException();
@@ -102,32 +104,32 @@ public class IdempotenceService {
         }
     }
 
-    private void validateFingerprint(String requestFingerprint, ModelEntity model) throws ValidationException {
-        String cacheFingerprint = model.getFingerprint();
+    private void validateFingerprint(String requestFingerprint, RequestEntity model) throws ValidationException {
+        String cacheFingerprint = model.getRequestFingerprint();
         if (!Objects.equals(cacheFingerprint, requestFingerprint)) {
             throw new ValidationException("Different payload");
         }
     }
 
-    private void validateMethod(ModelEntity model, String path, String method) throws ValidationException {
-        if (!Objects.equals(model.getMethod(), method) || !Objects.equals(model.getPath(), path)) {
+    private void validateMethod(RequestEntity model, String path, String method) throws ValidationException {
+        if (!Objects.equals(model.getRequestMethod(), method) || !Objects.equals(model.getRequestPath(), path)) {
             throw new ValidationException("Different path or method");
         }
     }
 
-    private ModelEntity getEncryptedCopy(ModelEntity source) throws GeneralSecurityException {
-        ModelEntity target = new ModelEntity();
+    private RequestEntity getEncryptedCopy(RequestEntity source) throws GeneralSecurityException {
+        RequestEntity target = new RequestEntity();
         BeanUtils.copyProperties(source, target);
-        String encryptedData = cryptoService.encrypt(target.getData());
-        target.setData(encryptedData);
+        String encryptedData = cryptoService.encrypt(target.getResponseData());
+        target.setResponseData(encryptedData);
         return target;
     }
 
-    private ModelEntity getDecryptedCopy(ModelEntity source) throws GeneralSecurityException {
-        ModelEntity target = new ModelEntity();
+    private RequestEntity getDecryptedCopy(RequestEntity source) throws GeneralSecurityException {
+        RequestEntity target = new RequestEntity();
         BeanUtils.copyProperties(source, target);
-        String encryptedData = cryptoService.decrypt(target.getData());
-        target.setData(encryptedData);
+        String encryptedData = cryptoService.decrypt(target.getResponseData());
+        target.setResponseData(encryptedData);
         return target;
     }
 }

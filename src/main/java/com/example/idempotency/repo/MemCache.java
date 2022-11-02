@@ -1,6 +1,6 @@
 package com.example.idempotency.repo;
 
-import com.example.idempotency.repo.entity.ModelEntity;
+import com.example.idempotency.repo.entity.RequestEntity;
 import com.example.idempotency.service.CryptoService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,18 +18,18 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MemCache implements Cache {
     private CryptoService cryptoService;
 
-    private Map<String, ModelEntity> memRepo = new ConcurrentHashMap<>();
+    private Map<String, RequestEntity> memRepo = new ConcurrentHashMap<>();
 
     @Override
-    public Optional<ModelEntity> getModel(String key) {
+    public Optional<RequestEntity> getModel(String key) {
         log.info("Cache check, key = {}, models count = {}", key, memRepo.size());
-        Optional<ModelEntity> modelEntity = Optional.ofNullable(memRepo.get(key));
+        Optional<RequestEntity> modelEntity = Optional.ofNullable(memRepo.get(key));
         if (modelEntity.isPresent()) {
-            ModelEntity model = new ModelEntity();
+            RequestEntity model = new RequestEntity();
             BeanUtils.copyProperties(modelEntity.get(), model);
             try {
-                String decryptedData = cryptoService.decrypt(model.getData());
-                model.setData(decryptedData);
+                String decryptedData = cryptoService.decrypt(model.getResponseData());
+                model.setResponseData(decryptedData);
                 return Optional.of(model);
             } catch (GeneralSecurityException e) {
                 log.error("GeneralSecurityException, something wrong with cryptoService");
@@ -39,13 +39,13 @@ public class MemCache implements Cache {
     }
 
     @Override
-    public boolean addModel(ModelEntity model) {
-        ModelEntity modelToSave = new ModelEntity();
+    public boolean addModel(RequestEntity model) {
+        RequestEntity modelToSave = new RequestEntity();
         BeanUtils.copyProperties(model, modelToSave);
         log.info("Cache write, key = {}, models count = {}, isProcessing = {}", modelToSave.getIdempotencyKey(), memRepo.size(), modelToSave.isProcessing());
         try {
-            String encryptedData = cryptoService.encrypt(modelToSave.getData());
-            modelToSave.setData(encryptedData);
+            String encryptedData = cryptoService.encrypt(modelToSave.getResponseData());
+            modelToSave.setResponseData(encryptedData);
         } catch (GeneralSecurityException e) {
             log.error("GeneralSecurityException, something wrong with cryptoService");
             return false;

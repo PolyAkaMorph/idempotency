@@ -1,11 +1,11 @@
 package com.example.idempotency.repo;
 
-import com.example.idempotency.repo.entity.ModelEntity;
+import com.example.idempotency.repo.entity.RequestEntity;
 
 import java.util.Optional;
 
 public interface Cache {
-    Optional<ModelEntity> getModel(String key);
+    Optional<RequestEntity> getModel(String key);
 
-    boolean addModel(ModelEntity model);
+    boolean addModel(RequestEntity model);
 }
